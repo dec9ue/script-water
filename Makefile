@@ -1,5 +1,7 @@
 
-all: parser.js
+all: test
+test: parser.js
+	java -jar js.jar $<
 
 .jsy.js:
 	kmyacc $<

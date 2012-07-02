@@ -1,8 +1,10 @@
 
 %{
 
+var B_print = print;
+
 function B_report_err(msg){
-    document.write("<p>!!!!! ERROR : "+ msg +" !!!!!</p>");
+    B_print("<p>!!!!! ERROR : "+ msg +" !!!!!</p>");
 }
 
 function B_S_APP(left,right){
@@ -134,7 +136,7 @@ function tosymbol(c)
 
 function yylex(){
    var retval = yylex_sub();
-   document.write("retval : "+ retval+" buf : "+buffer+"<BR>");
+   B_print("retval : "+ retval+" buf : "+buffer+"<BR>");
    return retval;
 }
 
@@ -172,7 +174,7 @@ function yylex_sub()
 
 
 function yyerror(msg){
-    document.write("!!!!!!!!!!!! ERROR : "+msg + " !!!!!!!!!!!!!!!");
+    B_print("!!!!!!!!!!!! ERROR : "+msg + " !!!!!!!!!!!!!!!");
     return "ERROR";
 }
 
@@ -192,7 +194,7 @@ function B_ENV_FIND(list,index){
 }
 
 function B_ENV_EMPTY(){
-   reutrn new B_ENV_LIST(null,null);
+   return new B_ENV_LIST(null,null);
 }
 
 function B_ENV_CONS(head,tail){
@@ -203,5 +205,5 @@ function fix_vars(env,tree){
 
 }
 
-document.write("res");
-document.write("<p>"+parse_tree.tostr()+"</p>");
+B_print("res");
+B_print("<p>"+parse_tree.tostr()+"</p>");
