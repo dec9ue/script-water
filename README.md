@@ -29,6 +29,7 @@ Samples
 
 Formal Definition
 ----
+```
 expr : app_seq
      | strict_seq
 abs  : "É«" expr "Ç¡";
@@ -39,4 +40,4 @@ app_seq  : app_seq  non_app_expr
          | non_app_expr
 strict_seq  : strict_expr strict_seq
 strict_expr : "Å_" expr
-
+```
