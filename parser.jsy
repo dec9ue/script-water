@@ -178,7 +178,7 @@ function yyerror(msg){
     return "ERROR";
 }
 
-buffer = "É«É«Å`Å` Å`Ç¡Ç¡";
+buffer = "É«É«Å`Å` É«Å`Å` Å`Ç¡Ç¡Ç¡";
 
 yyparse();
 
