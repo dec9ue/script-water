@@ -1,19 +1,24 @@
-
 %{
-
-var B_print = print;
+var print_msg = print;
 
 function B_report_err(msg){
-    B_print("<p>!!!!! ERROR : "+ msg +" !!!!!</p>");
+    print_msg("<p>!!!!! ERROR : "+ msg +" !!!!!</p>");
 }
 
 function B_S_APP(left,right){
     this.b_s_type = "B_S_APP";
     this.left = left;
     this.right = right;
-    this.isWHNF = true;
     this.reduce = function(){
-        return B_reducetoWHNF(left,right);
+        var lv = left.reduce();
+        if(lv.b_s_type == "B_S_ABS") {
+            lv.x.value = right;
+            var lvv = lv.body.reduce();
+            return lvv;
+        }else{
+            B_report_err("cannot apply : left " + lv.tostr() + " right : " + right.tostr());
+            return null;
+        }
     };
     this.tostr = function(){
          return this.b_s_type + "("
@@ -25,18 +30,42 @@ function B_S_APP(left,right){
 function B_S_VAR(name){
     this.name = name;
     this.b_s_type = "B_S_VAR";
-    this.value = undefined;
-    this.reduce = function(){return this.value.reduce();}
+    this.value = null;
+    this.reduce = function(){
+        B_report_err("type mismatch : var reduced : "+this.tostr());
+        return null;
+    }
     this.tostr = function(){
          return this.b_s_type + "("
-                +(this.name!=null?this.name:"null")+")";
+                +(this.name!=null?this.name:"null")+":"
+                +(this.value!=null?this.value.tostr():null)+")";
     }
 }
+
+function B_S_DUMMY(name){
+    this.name = name;
+    this.b_s_type = "B_S_DUMMY";
+    this.reduce = function(){
+        B_report_err("type mismatch : dummy reduced : "+this.tostr());
+        return null;
+    }
+    this.tostr = function(){
+         return this.b_s_type;
+    }
+}
+
+
 function B_S_VAR_REF(index){
     this.b_s_type = "B_S_VAR_REF";
     this.index = index;
     this.target = null;
-    this.reduce = function(){return this.target.reduce();}
+    this.reduce = function(){
+        if( this.target == null ) {
+            B_report_err("type mismatch : unset var_ref : "+this.tostr());
+            return null;
+        }
+        return this.target.value.reduce();
+    }
     this.tostr = function(){
          return this.b_s_type + "("
                 +(this.index  !=null?this.index:"null")+","
@@ -48,12 +77,10 @@ function B_S_ABS(x,body){
     this.b_s_type = "B_S_ABS";
     this.x = x;
     this.body = body;
-    this.isWHNF = false;
-    var v = this;
-    this.reduce = function(){return v;};
+    this.reduce = function(){return this;};
     this.tostr = function(){
          return this.b_s_type + "("
-                +(x!=null?x.tostr():"null")+","
+                +(x!=null?x.name:"null")+","
                 +(body!=null?body.tostr():"null")+")";
     }
 }
@@ -63,9 +90,12 @@ function B_S_STR(one,two){
     this.one = one;
     this.two = two;
     this.reduce = function(){
-        o = one.reduce();
-        // TODO
-        return new B_S_ABS();
+        if(one.b_s_type != "B_S_DUMMY"){
+            o = one.reduce();
+        }else{
+            o = one;
+        }
+        return (new B_S_APP(two,o)).reduce();
     }
     this.tostr = function(){
          return this.b_s_type + "("
@@ -74,18 +104,11 @@ function B_S_STR(one,two){
     }
 }
 
-function B_reducetoWHNF(v){
-    v.reduce();
-}
-
-function B_ISWHNF(v){
-    return v.isWHNF
-}
-
 var parse_tree;
 
 %}
 %token ABS_L ABS_R VAR PRIM STRICT 
+%right STRICT
 
 %%
 start: top;
@@ -93,7 +116,7 @@ start: top;
 top : expr { parse_tree = $1 ;};
 
 expr : app_seq    { $$ = $1;}
-     | strict_seq { $$ = $1;}
+     | STRICT strict_seq { $$ = new B_S_STR(new B_S_DUMMY(),$2);}
      ;
 
 non_app_expr : ABS_L expr ABS_R { $$ = new B_S_ABS(new B_S_VAR("abs_"+(abs_id++)),$2);}
@@ -103,8 +126,9 @@ non_app_expr : ABS_L expr ABS_R { $$ = new B_S_ABS(new B_S_VAR("abs_"+(abs_id++)
 app_seq  : app_seq non_app_expr { $$ = new B_S_APP($1,$2);}
          | non_app_expr         { $$ = $1;}
          ;
-strict_seq  : strict_expr strict_seq { $$ = new B_S_STR($1,$2);};
-strict_expr : STRICT expr {};
+strict_seq  : expr STRICT strict_seq { $$ = new B_S_STR($1,$3);}
+            | expr STRICT { $$ = $1; }
+            ;
 
 %%
 /* Lexical analyzer */
@@ -129,14 +153,14 @@ function tosymbol(c)
 {
   if(c == "É«") {return ABS_L;}
   if(c == "Ç¡") {return ABS_R;}
-  if(c == "Å^") {return STRICT;}
-  if(c == "Å_") {return PRIM;}
+  if(c == "Å_") {return STRICT;}
+  if(c == "Å^") {return PRIM;}
   return 0;
 }
 
 function yylex(){
    var retval = yylex_sub();
-   B_print("retval : "+ retval+" buf : "+buffer+"<BR>");
+//   print_msg("retval : "+ retval+" buf : "+buffer+"<BR>");
    return retval;
 }
 
@@ -174,36 +198,145 @@ function yylex_sub()
 
 
 function yyerror(msg){
-    B_print("!!!!!!!!!!!! ERROR : "+msg + " !!!!!!!!!!!!!!!");
+    print_msg("!!!!!!!!!!!! ERROR : "+msg + " !!!!!!!!!!!!!!!");
     return "ERROR";
 }
 
-buffer = "É«É«Å`Å` É«Å`Å` Å`Ç¡Ç¡Ç¡";
-
-yyparse();
 
 function B_ENV_LIST(head,tail){
    this.head = head;
    this.tail = tail;
 }
 
+// operation for immutable lists
+// this is pure functional
 function B_ENV_FIND(list,index){
    if(list == null) { return null;}
    if(index == 1 ) {return list.head;}
-   return B_ENV_FIND(tail,index - 1);
+   return B_ENV_FIND(list.tail,index - 1);
 }
 
+// operation for immutable lists
+// this is pure functional
+function B_ENV_FIND_INDEX(list,value){
+   if(list == null) { return null;}
+   if(value == list.head ) {return 1;}
+   return 1 + B_ENV_FIND_INDEX(list.tail,value);
+}
+
+// operation for immutable lists
+// this is pure functional
 function B_ENV_EMPTY(){
-   return new B_ENV_LIST(null,null);
+   return B_ENV_CONS(null,null);
 }
 
+// operation for immutable lists
+// this is pure functional
 function B_ENV_CONS(head,tail){
-    return new B_ENV_LIST(head,tail);
+    var b = new B_ENV_LIST(head,tail);
+    return b;
 }
 
 function fix_vars(env,tree){
-
+    // print_msg("<p>"+tree.b_s_type+"</p>");
+    // print_msg("<p>"+tree.tostr()+"</p>");
+    // ABS shifts de-bruijn index
+    if(tree.b_s_type == "B_S_ABS"){
+        fix_vars(B_ENV_CONS(tree.x,env),tree.body);
+        return tree;
+    }
+    // VAR_REF is terminal symbol
+    if(tree.b_s_type == "B_S_VAR_REF"){
+        tree.target = B_ENV_FIND(env,tree.index.length);
+        return tree;
+    }
+    // APP is terminal symbol
+    if(tree.b_s_type == "B_S_APP"){
+        fix_vars(env,tree.left);
+        fix_vars(env,tree.right);
+        return tree;
+    }
+    // STR is terminal symbol
+    if(tree.b_s_type == "B_S_STR"){
+        fix_vars(env,tree.one);
+        fix_vars(env,tree.two);
+        return tree;
+    }
+    // DUMMY is a terminal symbol
+    if(tree.b_s_type == "B_S_DUMMY"){
+        return tree;
+    }
+    print_msg("unknown type : " + tree.b_s_type+"<BR>");
 }
 
-B_print("res");
-B_print("<p>"+parse_tree.tostr()+"</p>");
+function to_water_str(env,tree){
+    // ABS shifts de-bruijn index
+    if(tree.b_s_type == "B_S_ABS"){
+        var v = to_water_str(B_ENV_CONS(tree.x,env),tree.body);
+        return "É«"+v+"Ç¡";
+    }
+    // VAR_REF is terminal symbol
+    if(tree.b_s_type == "B_S_VAR_REF"){
+        if(tree.target.value != null){
+            return to_water_str(env,tree.target.value);
+        }else{
+            var i = B_ENV_FIND_INDEX(env,tree.target);
+            return i;
+        }
+    }
+    // APP is non terminal symbol
+    if(tree.b_s_type == "B_S_APP"){
+        var v1 = to_water_str(env,tree.left);
+        var v2 = to_water_str(env,tree.right);
+        return v1 + " "+ v2;
+    }
+    // APP is non terminal symbol
+    if(tree.b_s_type == "B_S_STR"){
+        if(tree.one.b_s_type == "B_S_DUMMY"){
+            var v2 = to_water_str(env,tree.two);
+            return v2 + "Å_";
+        }
+        var v1 = to_water_str(env,tree.one);
+        var v2 = to_water_str(env,tree.two);
+        return "Å_" + v1 + "Å_"+ v2;
+    }
+    // DUMMY is a terminal symbol
+    if(tree.b_s_type == "B_S_DUMMY"){
+        return "";
+    }
+    print_msg("unknown type : " + tree.b_s_type+"<BR>");
+}
+
+function run_test(){
+    print_msg("input:<BR>");
+    print_msg("<p>"+buffer+"</p>");
+    yyparse();
+    fix_vars(null,parse_tree);
+
+    print_msg("string:<BR>");
+    print_msg("<p>"+to_water_str(null,parse_tree)+"</p>");
+    print_msg("parsed:<BR>");
+    print_msg("<p>"+parse_tree.tostr()+"</p>");
+    print_msg("finally:<BR>");
+    var reduced_tree = parse_tree.reduce();
+    print_msg("<p>"+reduced_tree.tostr()+"</p>");
+    print_msg("<p>"+to_water_str(null,reduced_tree)+"</p>");
+}
+
+buffer = "É«É«Å`Å`É«Å`Å` Å`Ç¡Ç¡Ç¡";
+run_test();
+
+buffer = "É«Å`Ç¡É«Å`Ç¡É«Å`Ç¡É«Å`Ç¡";
+run_test();
+
+buffer = "É«É«Å`Å`Ç¡Ç¡É«Å`Ç¡É«Å`Ç¡É«É«É«Å`Ç¡Ç¡Ç¡";
+run_test();
+
+buffer = "Å_É«É«Å`Å`Ç¡Ç¡É«Å`Ç¡É«Å`Ç¡É«É«É«Å`Ç¡Ç¡Ç¡Å_";
+run_test();
+
+buffer = "Å_É«É«Å`Å`Ç¡Ç¡É«Å`Ç¡Å_É«Å`Ç¡É«É«É«Å`Ç¡Ç¡Ç¡Å_";
+run_test();
+
+buffer = "Å_É«É«Å`Å`Ç¡Ç¡É«Å`Ç¡Å_É«Å`Ç¡É«É«É«Å`Å`Å`Ç¡Ç¡Ç¡Å_";
+run_test();
